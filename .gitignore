@@ -102,6 +102,7 @@ fabric.properties
 go.work
 
 tmp/
+bin/
 
 ### Node template
 # Logs
