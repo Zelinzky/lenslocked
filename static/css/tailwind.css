@@ -551,6 +551,10 @@ video {
   display: grid;
 }
 
+.hidden {
+  display: none;
+}
+
 .min-h-screen {
   min-height: 100vh;
 }

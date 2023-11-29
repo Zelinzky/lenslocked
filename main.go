@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/gorilla/csrf"
 
 	"lenslocked/controllers"
 	"lenslocked/models"
@@ -48,9 +50,30 @@ func main() {
 	r.Get("/signup", usersC.New)
 	r.Post("/signup", usersC.Create)
 	r.Get("/signin", usersC.SignIn)
+	r.Post("/signin", usersC.ProcessSignIn)
+	r.Get("/users/me", ipLog(usersC.CurrentUser))
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Page not found", http.StatusNotFound)
 	})
+
+	csrfKey := "gFvi45R4fy5xNBlnEeZtQbfAVCYEIAUX"
+	csrfMw := csrf.Protect(
+		[]byte(csrfKey),
+		// TODO: Fix this before deploying
+		csrf.Secure(false),
+	)
 	log.Println("Starting server on :3000")
-	http.ListenAndServe(":3000", r)
+	http.ListenAndServe(":3000", csrfMw(r))
+}
+
+// excercise middleware:
+
+func ipLog(next http.HandlerFunc) http.HandlerFunc {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		ip := strings.Split(r.RemoteAddr, ":")[0]
+		log.Printf("the ip of the request is: %s\n", ip)
+		log.Printf("the path requested is: %s\n", r.RequestURI)
+		next(w, r)
+	}
+	return fn
 }
