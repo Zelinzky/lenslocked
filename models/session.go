@@ -2,9 +2,7 @@ package models
 
 import (
 	"crypto/sha256"
-	"database/sql"
 	"encoding/base64"
-	"errors"
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
@@ -44,18 +42,13 @@ func (s *SessionService) Create(userID int) (*Session, error) {
 		Token:     token,
 		TokenHash: s.hash(token),
 	}
-	updateQuery := `
-		UPDATE sessions
+	query := `
+		INSERT INTO sessions (user_id, token_hash) VALUES ($1, $2)
+		ON CONFLICT (user_id) DO UPDATE 
 		SET token_hash = $2
-		WHERE user_id = $1
-		RETURNING id;`
+		RETURNING id`
 
-	err = s.DB.Get(&session.ID, updateQuery, session.UserID, session.TokenHash)
-	if errors.Is(err, sql.ErrNoRows) {
-		createQuery := `INSERT INTO sessions (user_id, token_hash) VALUES ($1, $2) RETURNING id;`
-		err = s.DB.Get(&session.ID, createQuery, session.UserID, session.TokenHash)
-	}
-
+	err = s.DB.Get(&session.ID, query, session.UserID, session.TokenHash)
 	if err != nil {
 		return nil, fmt.Errorf("create: %w", err)
 	}
@@ -67,19 +60,13 @@ func (s *SessionService) User(token string) (*User, error) {
 	tokenHash := s.hash(token)
 	var user User
 	query := `
-		SELECT user_id
-		FROM sessions
-		WHERE token_hash = $1;`
-	err := s.DB.Get(&user.ID, query, tokenHash)
+		SELECT u.id, u.email, u.password_hash
+		FROM sessions s JOIN users u on u.id = s.user_id
+		WHERE s.token_hash = $1;`
+	err := s.DB.Get(&user, query, tokenHash)
 	if err != nil {
 		return nil, fmt.Errorf("user: %w", err)
 	}
-	query = `SELECT * FROM users WHERE id = $1;`
-	err = s.DB.Get(&user, query, user.ID)
-	if err != nil {
-		return nil, fmt.Errorf("user: %w", err)
-	}
-
 	return &user, nil
 }
 
