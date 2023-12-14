@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/csrf"
 
 	"lenslocked/controllers"
+	"lenslocked/migrations"
 	"lenslocked/models"
 	"lenslocked/static"
 	"lenslocked/templates"
@@ -30,6 +31,15 @@ func main() {
 		panic(err)
 	}
 	defer db.Close()
+
+	// check if migrations have been applied
+	uptodate, err := models.IsMigUpToDate(db, migrations.FS, ".")
+	fmt.Println(uptodate, err)
+	// apply all available migrations this may be a bad idea.
+	err = models.MigrateFS(db, migrations.FS, ".")
+	if err != nil {
+		panic(err)
+	}
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)

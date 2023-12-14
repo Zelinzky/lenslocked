@@ -2,9 +2,12 @@ package models
 
 import (
 	"fmt"
+	"io/fs"
 
+	"github.com/go-faster/errors"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
+	"github.com/pressly/goose/v3"
 )
 
 type PostgresConfig struct {
@@ -41,4 +44,37 @@ func Open(config PostgresConfig) (*sqlx.DB, error) {
 		return nil, fmt.Errorf("open: %w", err)
 	}
 	return db, nil
+}
+
+func IsMigUpToDate(db *sqlx.DB, fs fs.FS, dir string) (bool, error) {
+	goose.SetBaseFS(fs)
+	err := goose.SetDialect("postgres")
+	if err != nil {
+		return false, fmt.Errorf("check migration: %w", err)
+	}
+	version, err := goose.GetDBVersion(db.DB)
+	if err != nil {
+		return false, err
+	}
+	_, err = goose.CollectMigrations(dir, version, goose.MaxVersion)
+	if errors.Is(err, goose.ErrNoMigrationFiles) {
+		return true, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("check migration: %w", err)
+	}
+	return false, nil
+}
+
+func MigrateFS(db *sqlx.DB, fs fs.FS, dir string) error {
+	goose.SetBaseFS(fs)
+	err := goose.SetDialect("postgres")
+	if err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	err = goose.Up(db.DB, dir)
+	if err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	return nil
 }
