@@ -18,7 +18,7 @@ type UserService struct {
 	DB *sqlx.DB
 }
 
-func (us UserService) Create(email, password string) (*User, error) {
+func (us *UserService) Create(email, password string) (*User, error) {
 	email = strings.ToLower(email)
 
 	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -46,7 +46,7 @@ func (us UserService) Create(email, password string) (*User, error) {
 	return &user, nil
 }
 
-func (us UserService) Authenticate(email, password string) (*User, error) {
+func (us *UserService) Authenticate(email, password string) (*User, error) {
 	email = strings.ToLower(email)
 	var user User
 	query := `SELECT * FROM users WHERE email=$1`
@@ -59,4 +59,18 @@ func (us UserService) Authenticate(email, password string) (*User, error) {
 		return nil, fmt.Errorf("authenticate: %w", err)
 	}
 	return &user, nil
+}
+
+func (us *UserService) UpdatePassword(userID int, password string) error {
+	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("update password: %w", err)
+	}
+	passwordHash := string(hashedBytes)
+	query := `UPDATE users SET password_hash = $2 WHERE id = $1;`
+	_, err = us.DB.Exec(query, userID, passwordHash)
+	if err != nil {
+		return fmt.Errorf("update password: %w", err)
+	}
+	return nil
 }

@@ -2,48 +2,38 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"strconv"
+
+	"github.com/joho/godotenv"
 
 	"lenslocked/models"
 )
 
-type User struct {
-	Name string
-	Age  int
-}
-
-type PostgresConfig struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	Database string
-	SSLMode  string
-}
-
-func (cfg PostgresConfig) String() string {
-	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s", cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Database, cfg.SSLMode)
-}
-
 func main() {
-	cfg := models.DefaultPostgresConfig()
-	db, err := models.Open(cfg)
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+	host := os.Getenv("SMTP_HOST")
+	portStr := os.Getenv("SMTP_PORT")
+	port, err := strconv.Atoi(portStr)
 	if err != nil {
 		panic(err)
 	}
-	defer db.Close()
+	username := os.Getenv("SMTP_USERNAME")
+	password := os.Getenv("SMTP_PASSWORD")
 
-	err = db.Ping()
+	es := models.NewEmailService(models.SMTPConfig{
+		Host:     host,
+		Port:     port,
+		Username: username,
+		Password: password,
+	})
+	err = es.ForgotPassword("jon@calhoun.io", "https://lenslocked.com/reset-pw?token=abc123")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Connected!")
-
-	us := models.UserService{
-		DB: db,
-	}
-	user, err := us.Create("bob@bob.com", "bob123")
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(user)
+	fmt.Println("Email sent")
 }

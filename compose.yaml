@@ -13,14 +13,20 @@ services:
     ports: # Expose ports so that apps not running via docker compose can connect to them.
       - "5432:5432" # format here is "port on our machine":"port on container"
     volumes:
-      - ./_volumes/postgres:/var/lib/postgresql/data:z # :z is for working around selinux to retag the context of the mounted folder
+      - ./_volumes/postgres:/var/lib/postgresql/data
   redis:
     image: redis/redis-stack
     restart: always
     environment:
-      REDIS_ARGS: --save 20 1
+      REDIS_ARGS: --save 20 1 # writes to disk every 20 seconds if there is at least 1 change
     ports:
-      - '6379:6379'
-      - '8001:8001'
+      - '6379:6379' # this is the redis port
+      - '8001:8001' # this is the redisinsight port
     volumes:
-      - ./_volumes/redis:/data:z
+      - ./_volumes/redis:/data
+  mailhog:
+    image: mailhog/mailhog
+    restart: always
+    ports:
+      - '1025:1025' # smtp port
+      - '8025:8025' # http port
