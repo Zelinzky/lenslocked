@@ -69,11 +69,7 @@ func (p *PasswordResetService) Create(email string) (*PasswordReset, error) {
 		VALUES (:user_id, :token_hash, :expires_at) ON CONFLICT (user_id) DO 
 		UPDATE SET token_hash = :token_hash, expires_at = :expires_at RETURNING id;
 	`
-	preparedQuery, err := p.DB.PrepareNamed(query)
-	if err != nil {
-		return nil, fmt.Errorf("create: %w", err)
-	}
-	err = preparedQuery.Get(&pwReset.ID, pwReset)
+	err = sqlxnDB{p.DB}.namedGet(&pwReset.ID, query, pwReset)
 	if err != nil {
 		return nil, fmt.Errorf("create: %w", err)
 	}
@@ -84,7 +80,7 @@ func (p *PasswordResetService) Create(email string) (*PasswordReset, error) {
 
 func (p *PasswordResetService) Consume(token string) (*User, error) {
 	tokenHash := p.hash(token)
-	var dro struct {
+	var dao struct {
 		User    User          `db:"user"`
 		PwReset PasswordReset `db:"pw_reset"`
 	}
@@ -93,20 +89,20 @@ func (p *PasswordResetService) Consume(token string) (*User, error) {
 		users.id "user.id", users.email "user.email", users.password_hash "user.password_hash"
 		FROM password_resets JOIN users ON users.id = password_resets.user_id
 		WHERE password_resets.token_hash = $1;`
-	err := p.DB.Get(&dro, query, tokenHash)
+	err := p.DB.Get(&dao, query, tokenHash)
 	if err != nil {
 		return nil, fmt.Errorf("consume: %w", err)
 	}
 
-	if time.Now().After(dro.PwReset.ExpiresAt) {
+	if time.Now().After(dao.PwReset.ExpiresAt) {
 		return nil, fmt.Errorf("token expired: %v", token)
 	}
-	err = p.delete(dro.PwReset.ID)
+	err = p.delete(dao.PwReset.ID)
 	if err != nil {
 		return nil, fmt.Errorf("consume: %w", err)
 	}
 
-	out := dro.User
+	out := dao.User
 
 	return &out, nil
 }
