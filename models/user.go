@@ -1,10 +1,12 @@
 package models
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/Zelinzky/go-sqlf"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jmoiron/sqlx"
@@ -12,7 +14,7 @@ import (
 )
 
 var (
-	// ErrEmailTaken :
+	// ErrEmailTaken
 	// A common pattern is to add the package as a prefix to the error for context.
 	ErrEmailTaken = errors.New("models: email address is already in use")
 )
@@ -27,6 +29,15 @@ type UserService struct {
 	DB *sqlx.DB
 }
 
+//go:embed user.sql
+var userQueriesFile string
+
+var userQueries map[string]string
+
+func init() {
+	userQueries = sqlf.Load(userQueriesFile)
+}
+
 func (us *UserService) Create(email, password string) (*User, error) {
 	email = strings.ToLower(email)
 
@@ -39,8 +50,8 @@ func (us *UserService) Create(email, password string) (*User, error) {
 		Email:        email,
 		PasswordHash: passwordHash,
 	}
-	query := `INSERT INTO users (email, password_hash) VALUES (:email, :password_hash) RETURNING id`
-	rows, err := us.DB.NamedQuery(query, user)
+
+	err = sqlf.NamedDB{DB: us.DB}.NamedGet(&user.ID, userQueries["create"], user)
 	if err != nil {
 		var pgError *pgconn.PgError
 		if errors.As(err, &pgError) {
@@ -50,13 +61,6 @@ func (us *UserService) Create(email, password string) (*User, error) {
 		}
 		return nil, fmt.Errorf("create user: %w", err)
 	}
-	defer rows.Close()
-
-	if rows.Next() {
-		if err := rows.Scan(&user.ID); err != nil {
-			return nil, fmt.Errorf("create user: %w", err)
-		}
-	}
 
 	return &user, nil
 }
@@ -64,8 +68,7 @@ func (us *UserService) Create(email, password string) (*User, error) {
 func (us *UserService) Authenticate(email, password string) (*User, error) {
 	email = strings.ToLower(email)
 	var user User
-	query := `SELECT * FROM users WHERE email=$1`
-	err := us.DB.Get(&user, query, email)
+	err := us.DB.Get(&user, userQueries["authenticate"], email)
 	if err != nil {
 		return nil, fmt.Errorf("authenticate: %w", err)
 	}
@@ -82,8 +85,7 @@ func (us *UserService) UpdatePassword(userID int, password string) error {
 		return fmt.Errorf("update password: %w", err)
 	}
 	passwordHash := string(hashedBytes)
-	query := `UPDATE users SET password_hash = $2 WHERE id = $1;`
-	_, err = us.DB.Exec(query, userID, passwordHash)
+	_, err = us.DB.Exec(userQueries["updatePass"], userID, passwordHash)
 	if err != nil {
 		return fmt.Errorf("update password: %w", err)
 	}

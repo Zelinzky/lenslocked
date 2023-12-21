@@ -2,9 +2,11 @@ package models
 
 import (
 	"crypto/sha256"
+	_ "embed"
 	"encoding/base64"
 	"fmt"
 
+	"github.com/Zelinzky/go-sqlf"
 	"github.com/jmoiron/sqlx"
 
 	"lenslocked/rand"
@@ -17,7 +19,7 @@ type Session struct {
 	UserID int `db:"user_id"`
 	// Token is only set when createing a news session. When looking upa seddsion
 	// this will be left empaty, as we only store the hash of a session token
-	// in our db and we are not able to reverse it into a raw token.
+	// in our db, and we are not able to reverse it into a raw token.
 	Token     string `db:"token"`
 	TokenHash string `db:"token_hash"`
 }
@@ -25,6 +27,15 @@ type Session struct {
 type SessionService struct {
 	DB            *sqlx.DB
 	BytesPerToken int
+}
+
+//go:embed session.sql
+var sessionQueriesFile string
+
+var sessionQueries map[string]string
+
+func init() {
+	sessionQueries = sqlf.Load(sessionQueriesFile)
 }
 
 func (s *SessionService) Create(userID int) (*Session, error) {
@@ -42,13 +53,8 @@ func (s *SessionService) Create(userID int) (*Session, error) {
 		Token:     token,
 		TokenHash: s.hash(token),
 	}
-	query := `
-		INSERT INTO sessions (user_id, token_hash) VALUES ($1, $2)
-		ON CONFLICT (user_id) DO UPDATE 
-		SET token_hash = $2
-		RETURNING id`
 
-	err = s.DB.Get(&session.ID, query, session.UserID, session.TokenHash)
+	err = sqlf.NamedDB{DB: s.DB}.Get(&session.ID, sessionQueries["create"], session)
 	if err != nil {
 		return nil, fmt.Errorf("create: %w", err)
 	}
@@ -59,11 +65,7 @@ func (s *SessionService) Create(userID int) (*Session, error) {
 func (s *SessionService) User(token string) (*User, error) {
 	tokenHash := s.hash(token)
 	var user User
-	query := `
-		SELECT u.id, u.email, u.password_hash
-		FROM sessions s JOIN users u on u.id = s.user_id
-		WHERE s.token_hash = $1;`
-	err := s.DB.Get(&user, query, tokenHash)
+	err := s.DB.Get(&user, sessionQueries["user"], tokenHash)
 	if err != nil {
 		return nil, fmt.Errorf("user: %w", err)
 	}
@@ -72,8 +74,7 @@ func (s *SessionService) User(token string) (*User, error) {
 
 func (s *SessionService) Delete(token string) error {
 	tokenHash := s.hash(token)
-	query := `DELETE FROM sessions WHERE token_hash = $1;`
-	_, err := s.DB.Exec(query, tokenHash)
+	_, err := s.DB.Exec(sessionQueries["delete"], tokenHash)
 	if err != nil {
 		return fmt.Errorf("delete: %w", err)
 	}

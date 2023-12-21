@@ -1,8 +1,9 @@
 module lenslocked
 
-go 1.21
+go 1.21.5
 
 require (
+	github.com/Zelinzky/go-sqlf v0.0.3
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/go-faster/errors v0.6.1
 	github.com/go-mail/mail/v2 v2.3.0
