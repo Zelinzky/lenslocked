@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"path/filepath"
 
 	"github.com/go-faster/errors"
 	"github.com/gorilla/csrf"
@@ -58,7 +59,7 @@ func (t Template) Execute(w http.ResponseWriter, r *http.Request, data any, errs
 }
 
 func ParseFS(fs fs.FS, patterns ...string) (Template, error) {
-	htmlTpl := template.New(patterns[0])
+	htmlTpl := template.New(filepath.Base(patterns[0]))
 	htmlTpl = htmlTpl.Funcs(template.FuncMap{
 		"csrfField": func() (template.HTML, error) {
 			return "", fmt.Errorf("csrfField NOT implemented")
@@ -77,6 +78,7 @@ func ParseFS(fs fs.FS, patterns ...string) (Template, error) {
 	return Template{
 		htmlTpl: htmlTpl,
 	}, nil
+
 }
 
 func Must(tpl Template, err error) Template {

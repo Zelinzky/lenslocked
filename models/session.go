@@ -54,7 +54,7 @@ func (s *SessionService) Create(userID int) (*Session, error) {
 		TokenHash: s.hash(token),
 	}
 
-	err = sqlf.NamedDB{DB: s.DB}.Get(&session.ID, sessionQueries["create"], session)
+	err = sqlf.NamedDB{DB: s.DB}.NamedGet(&session.ID, sessionQueries["create"], session)
 	if err != nil {
 		return nil, fmt.Errorf("create: %w", err)
 	}
