@@ -235,3 +235,9 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
+
+# ignore test gallery images
+images/
+
+# ignore local volumes
+_volumes/

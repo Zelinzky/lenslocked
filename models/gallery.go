@@ -5,6 +5,10 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/Zelinzky/go-sqlf"
 	"github.com/jmoiron/sqlx"
@@ -27,6 +31,8 @@ func init() {
 
 type GalleryService struct {
 	DB *sqlx.DB
+	// ImagesDir holds the directory where the images are going to be stored
+	ImagesDir string
 }
 
 func (g *GalleryService) Create(title string, userID int) (*Gallery, error) {
@@ -78,4 +84,68 @@ func (g *GalleryService) Delete(id int) error {
 		return fmt.Errorf("delete gallery by id: %w", err)
 	}
 	return nil
+}
+
+func (g *GalleryService) galleryDir(id int) string {
+	imagesDir := g.ImagesDir
+	if imagesDir == "" {
+		imagesDir = "images"
+	}
+	return filepath.Join(imagesDir, fmt.Sprintf("gallery-%d", id))
+}
+
+type Image struct {
+	GalleryID int
+	Path      string
+	Filename  string
+}
+
+func (g *GalleryService) Images(galleryID int) ([]Image, error) {
+	globPattern := filepath.Join(g.galleryDir(galleryID), "*")
+	allFiles, err := filepath.Glob(globPattern)
+	if err != nil {
+		return nil, fmt.Errorf("retrieving gallery images: %w", err)
+	}
+	var images []Image
+	for _, file := range allFiles {
+		if hasExtensions(file, g.extensions()) {
+			images = append(images, Image{
+				GalleryID: galleryID,
+				Path:      file,
+				Filename:  filepath.Base(file),
+			})
+		}
+	}
+	return images, nil
+}
+
+func (g *GalleryService) Image(galleryID int, filename string) (Image, error) {
+	imagePath := filepath.Join(g.galleryDir(galleryID), filename)
+	_, err := os.Stat(imagePath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return Image{}, ErrNotFound
+		}
+		return Image{}, fmt.Errorf("querying for image: %w", err)
+	}
+	return Image{
+		GalleryID: galleryID,
+		Path:      filename,
+		Filename:  imagePath,
+	}, nil
+}
+
+func hasExtensions(file string, extensions []string) bool {
+	for _, ext := range extensions {
+		file = strings.ToLower(file)
+		ext = strings.ToLower(ext)
+		if filepath.Ext(file) == ext {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *GalleryService) extensions() []string {
+	return []string{".png", ".jpg", ".jpeg", ".gif"}
 }

@@ -1,5 +1,7 @@
 version: "3.9"
 
+# this file contains unused containers but serves as an example of gettign a working local env with multiple external services
+
 services:
   # Our Postgres database
   postgres: # The service will be named db.
@@ -24,6 +26,18 @@ services:
       - '8001:8001' # this is the redisinsight port
     volumes:
       - ./_volumes/redis:/data
+  minio:
+    image: minio/minio
+    restart: always
+    environment:
+      MINIO_ROOT_USER: baloo
+      MINIO_ROOT_PASSWORD: junglebook
+    command: server /data --console-address ":9001"
+    ports:
+      - '9000:9000' # api port
+      - '9001:9001' # console port
+    volumes:
+      - ./_volumes/minio:/data
   mailhog:
     image: mailhog/mailhog
     restart: always
