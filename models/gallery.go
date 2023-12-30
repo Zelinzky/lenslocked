@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -83,6 +84,10 @@ func (g *GalleryService) Delete(id int) error {
 	if err != nil {
 		return fmt.Errorf("delete gallery by id: %w", err)
 	}
+	err = os.RemoveAll(g.galleryDir(id))
+	if err != nil {
+		return fmt.Errorf("delete gallery images: %w", err)
+	}
 	return nil
 }
 
@@ -108,7 +113,7 @@ func (g *GalleryService) Images(galleryID int) ([]Image, error) {
 	}
 	var images []Image
 	for _, file := range allFiles {
-		if hasExtensions(file, g.extensions()) {
+		if hasExtension(file, g.extensions()) {
 			images = append(images, Image{
 				GalleryID: galleryID,
 				Path:      file,
@@ -130,12 +135,52 @@ func (g *GalleryService) Image(galleryID int, filename string) (Image, error) {
 	}
 	return Image{
 		GalleryID: galleryID,
-		Path:      filename,
-		Filename:  imagePath,
+		Path:      imagePath,
+		Filename:  filename,
 	}, nil
 }
 
-func hasExtensions(file string, extensions []string) bool {
+func (g *GalleryService) DeleteImage(galleryID int, filename string) error {
+	image, err := g.Image(galleryID, filename)
+	if err != nil {
+		return fmt.Errorf("deleting image: %w", err)
+	}
+	err = os.Remove(image.Path)
+	if err != nil {
+		return fmt.Errorf("deleting image: %w", err)
+	}
+	return nil
+}
+
+func (g *GalleryService) CreateImage(galleryID int, filename string, contents io.ReadSeeker) error {
+	err := checkContentType(contents, g.imageContentTypes())
+	if err != nil {
+		return fmt.Errorf("creating image %v: %w", filename, err)
+	}
+	if !hasExtension(filename, g.extensions()) {
+		return fmt.Errorf("creating image %v: %w", filename, err)
+	}
+
+	galleryDir := g.galleryDir(galleryID)
+	err = os.MkdirAll(galleryDir, 0755)
+	if err != nil {
+		return fmt.Errorf("creating gallery-%d images directory: %w", galleryID, err)
+	}
+	imagePath := filepath.Join(galleryDir, filename)
+	dst, err := os.Create(imagePath)
+	if err != nil {
+		return fmt.Errorf("creating image file: %w", err)
+	}
+	defer dst.Close()
+
+	_, err = io.Copy(dst, contents)
+	if err != nil {
+		return fmt.Errorf("copying contents to image: %w", err)
+	}
+	return nil
+}
+
+func hasExtension(file string, extensions []string) bool {
 	for _, ext := range extensions {
 		file = strings.ToLower(file)
 		ext = strings.ToLower(ext)
@@ -148,4 +193,8 @@ func hasExtensions(file string, extensions []string) bool {
 
 func (g *GalleryService) extensions() []string {
 	return []string{".png", ".jpg", ".jpeg", ".gif"}
+}
+
+func (g *GalleryService) imageContentTypes() []string {
+	return []string{"image/png", "image/jpeg", "image/gif"}
 }
