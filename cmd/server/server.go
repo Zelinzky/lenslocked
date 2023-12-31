@@ -46,7 +46,17 @@ func loadEnvConfig() (config, error) {
 		return cfg, err
 	}
 	// TODO: read the psql values from an env var
-	cfg.PSQL = models.DefaultPostgresConfig()
+	cfg.PSQL = models.PostgresConfig{
+		Host:     os.Getenv("PSQL_HOST"),
+		Port:     os.Getenv("PSQL_PORT"),
+		User:     os.Getenv("PSQL_USER"),
+		Password: os.Getenv("PSQL_PASSWORD"),
+		Database: os.Getenv("PSQL_DATABASE"),
+		SSLMode:  os.Getenv("PSQL_SSLMODE"),
+	}
+	if cfg.PSQL.Host == "" && cfg.PSQL.Port == "" {
+		return cfg, fmt.Errorf("no PSQL Config provided")
+	}
 
 	// TODO: SMTP
 	cfg.SMTP.Host = os.Getenv("SMTP_HOST")
@@ -59,11 +69,11 @@ func loadEnvConfig() (config, error) {
 	cfg.SMTP.Password = os.Getenv("SMTP_PASSWORD")
 
 	// TODO: Read the CSRF values from an ENV variable
-	cfg.CSRF.Key = "gFvi44R4fy5xNBlnEeZtQbfAVCYEIAUX"
-	cfg.CSRF.Secure = false
+	cfg.CSRF.Key = os.Getenv("CSRF_KEY")
+	cfg.CSRF.Secure = os.Getenv("CSRF_SECURE") == "true"
 
 	// TODO: Read the server values from an ENV variable
-	cfg.Server.Address = ":3000"
+	cfg.Server.Address = os.Getenv("SERVER_ADDRESS")
 
 	return cfg, nil
 }
@@ -75,6 +85,10 @@ func main() {
 		panic(err)
 	}
 
+	run(cfg)
+}
+
+func run(cfg config) {
 	// Set up the db
 	db, err := models.Open(cfg.PSQL)
 	if err != nil {
